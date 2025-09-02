@@ -1,0 +1,22 @@
+[tool.poetry]
+package-mode = false
+name = "onboard-erick-sousa-ia"
+version = "0.1.0"
+description = "Onboarding project for AI development"
+authors = ["Erick-DAS <erick.sousa@taqtile.com.br>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.6"
+python-dotenv = "1.1.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pyright]
+exclude = [".venv"]
+typeCheckingMode = "off"
+venv = ".venv"
+venvPath = "."
