@@ -38,7 +38,6 @@ messages = [
 ]
 
 if provider == "openai":
-    os.getenv("OPENAI_API_KEY")
     llm = init_chat_model(model, model_provider=provider)
 else:
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
