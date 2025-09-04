@@ -3,8 +3,6 @@ import os
 from langchain.chat_models import init_chat_model
 from langchain_openai import ChatOpenAI
 
-openrouter_url = "https://openrouter.ai/api/v1"
-openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
 def get_models():
     return {
@@ -14,8 +12,10 @@ def get_models():
     }
 
 def get_llm(provider, model):
+    openrouter_url = os.getenv("OPENROUTER_URL")
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+
     if provider == "openai":
-        os.getenv("OPENAI_API_KEY")
         llm = init_chat_model(model, model_provider=provider)
     else:
         llm = ChatOpenAI(
