@@ -6,7 +6,10 @@ from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AI
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 
 def init_db(name: str) -> sqlite3.Connection:
-    db = sqlite3.connect(name)
+    db_path = os.path.join(os.getcwd(), 'src','data', name)
+    print(db_path)
+
+    db = sqlite3.connect(db_path)
     cursor = db.cursor()
 
     cursor.execute(
@@ -82,5 +85,5 @@ def save_messages(db: sqlite3.Connection, chat_id: str, messages: list[MessageCr
 
 # for script with RunnableWithMessageHistory
 def fetch_messages_for_runnable(session_id: str) -> SQLChatMessageHistory:
-    return SQLChatMessageHistory(session_id, connection=f"sqlite:///{os.getenv('SQLITE_DB_NAME')}")
+    return SQLChatMessageHistory(session_id, connection=f"sqlite:///./src/data/{os.getenv('SQLITE_DB_NAME')}")
 
