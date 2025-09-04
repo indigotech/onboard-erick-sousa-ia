@@ -4,14 +4,14 @@ from langchain.chat_models import init_chat_model
 from langchain_openai import ChatOpenAI
 
 
-def get_models():
+def get_models() -> dict:
     return {
         "openai": "gpt-4o-mini",
         "deepseek": "deepseek/deepseek-r1:free",
         "meta-llama": "meta-llama/llama-4-maverick:free",
     }
 
-def get_llm(provider, model):
+def get_llm(provider: str, model: str) -> ChatOpenAI:
     openrouter_url = os.getenv("OPENROUTER_URL")
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 

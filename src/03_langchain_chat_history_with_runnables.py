@@ -1,19 +1,18 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 from utils import get_args, get_models, get_llm
 from schemas.message import MessageCreate
 from db import init_db, fetch_messages, save_messages, create_chat, fetch_messages_for_runnable
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_community.chat_message_histories import ChatMessageHistory
-from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from datetime import datetime
 
 
 def main():
-    db = init_db("chat_history.db")
+    db = init_db(os.getenv("SQLITE_DB_NAME"))
 
     args = get_args()
     provider = args.provider
@@ -74,14 +73,6 @@ def main():
         if user_input == "exit":
             break;
 
-        #prompt = messages.invoke(
-        #    {
-        #        "history": current_history,
-        #        "user_input": user_input,
-        #    }
-        #)
-
-        #current_history.append(HumanMessage(content=user_input))
         new_messages.append(MessageCreate(
             content=user_input,
             role="user",
@@ -103,7 +94,6 @@ def main():
             ai_message = AIMessage(content=response.content)
             print()
  
-        # current_history.append(ai_message)
         new_messages.append(MessageCreate(
             content=ai_message.content,
             role="assistant",

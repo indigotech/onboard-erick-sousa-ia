@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 from utils import get_args, get_models, get_llm
 from schemas.message import MessageCreate
 from db import init_db, fetch_messages, save_messages, create_chat
@@ -10,7 +11,7 @@ from datetime import datetime
 
 
 def main():
-    db = init_db("chat_history.db")
+    db = init_db(os.getenv("SQLITE_DB_NAME"))
 
     args = get_args()
     provider = args.provider

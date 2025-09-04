@@ -1,5 +1,6 @@
 import sqlite3
 import uuid
+import os
 from schemas.message import MessageCreate
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from langchain_community.chat_message_histories import SQLChatMessageHistory
@@ -81,5 +82,5 @@ def save_messages(db: sqlite3.Connection, chat_id: str, messages: list[MessageCr
 
 # for script with RunnableWithMessageHistory
 def fetch_messages_for_runnable(session_id: str) -> SQLChatMessageHistory:
-    return SQLChatMessageHistory(session_id, connection="sqlite:///chat_history.db")
+    return SQLChatMessageHistory(session_id, connection=f"sqlite:///{os.getenv('SQLITE_DB_NAME')}")
 
