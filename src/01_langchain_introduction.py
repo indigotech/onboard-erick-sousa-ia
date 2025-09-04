@@ -20,7 +20,7 @@ provider = args.provider
 lang = args.language
 stream = args.stream
 
-openrouter_url = "https://openrouter.ai/api/v1"
+openrouter_url = os.getenv("OPENROUTER_URL")
 models = {
     "openai": "gpt-4o-mini",
     "deepseek": "deepseek/deepseek-r1:free",
