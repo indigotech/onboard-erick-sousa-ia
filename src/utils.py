@@ -34,7 +34,7 @@ def get_args() -> dict:
                         help="Chooses the LLM Vendor.", required=True)
     parser.add_argument("-l", "--language", choices=["portuguese", "english", "japanese", "indonesian", "german", "spanish"],
                         help="Chooses the response's language.", required=True)
-    parser.add_argument(
-        "-s", "--stream", help="Generate the response in real time.", action="store_true")
+    parser.add_argument("-c", "--chat_id", help="Specifies an already existing conversation")
+    parser.add_argument("-s", "--stream", help="Generate the response in real time.", action="store_true")
 
     return parser.parse_args()
