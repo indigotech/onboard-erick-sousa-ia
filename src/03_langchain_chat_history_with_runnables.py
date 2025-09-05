@@ -6,7 +6,7 @@ from utils import get_args, get_models, get_llm
 from schemas.message import MessageCreate
 from db import init_db, fetch_messages, save_messages, create_chat, fetch_messages_for_runnable
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from datetime import datetime
 
@@ -28,6 +28,7 @@ def main():
     messages = ChatPromptTemplate(
         [
             SystemMessage(content=system_prompt),
+            MessagesPlaceholder(variable_name="history"),
             ("human", "{user_input}"),
         ]
     )
@@ -40,6 +41,7 @@ def main():
         chain,
         fetch_messages_for_runnable,
         input_messages_key="user_input",
+        history_messages_key="history",
     )
 
     if chat_id is None:
