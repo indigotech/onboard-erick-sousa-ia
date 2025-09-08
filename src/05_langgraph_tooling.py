@@ -15,7 +15,7 @@ from langchain_core.tools import tool, Tool
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph.state import CompiledStateGraph
 from datetime import datetime
-from colorama import Fore, Style, Back
+from colorama import Fore, Style
 
 def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
     print(Fore.CYAN)
@@ -42,18 +42,18 @@ def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
 def invoke_response(prompt: ChatPromptValue, temp_history: list, agent: CompiledStateGraph, tools: list[Tool], current_history: list[BaseMessage]):
     message_count = len(current_history)
     response = ""
-    print("\n" + Back.WHITE + Fore.RED + "Task --> LLM" + Back.RESET + Fore.RESET)
+    print("\n" +  Fore.RED + "Task --> LLM" +  Fore.RESET)
     updated_messages = agent.invoke(prompt)
-    print(Back.WHITE + Fore.GREEN + "LLM reasoning" + Back.RESET + Fore.RESET)
+    print( Fore.GREEN + "LLM reasoning" +  Fore.RESET)
 
     for new_message in updated_messages.get("messages")[message_count:]:
         if isinstance(new_message, AIMessage) and not new_message.content:
-            print(Back.WHITE + Fore.YELLOW + "LLM --> Tool" + Back.RESET + Fore.RESET)
+            print(Fore.YELLOW + "LLM --> Tool" + Fore.RESET)
         elif isinstance(new_message, AIMessage):
             response = new_message
             print(Fore.CYAN + "\nResponse: " + Fore.RESET + response.content + "\n")
         elif isinstance(new_message, ToolMessage):
-            print(Back.WHITE + Fore.BLUE + "Invoking the tool called " + new_message.name + Back.RESET + Fore.RESET)
+            print(Fore.MAGENTA + "Invoking the tool called " + new_message.name + Fore.RESET)
 
     return response
 
@@ -61,15 +61,15 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, agent: Compiled
     response = ""
     first_tc = True
     first_content = True
-    print("\n" + Back.WHITE + Fore.RED + "Task --> LLM" + Back.RESET + Fore.RESET)
-    print(Back.WHITE + Fore.GREEN + "LLM reasoning" + Back.RESET + Fore.RESET)
+    print("\n" + Fore.RED + "Task --> LLM" + Fore.RESET)
+    print(Fore.GREEN + "LLM reasoning" + Fore.RESET)
 
     for chunk, metadata in agent.stream(prompt, stream_mode="messages"):
         if isinstance(chunk, AIMessageChunk) and not chunk.content:
             if first_tc:
                 if not first_content:
                     print("\n")
-                print(Back.WHITE + Fore.YELLOW + "LLM --> Tool" + Back.RESET + Fore.RESET)
+                print(Fore.YELLOW + "LLM --> Tool" + Fore.RESET)
                 first_tc = False
         elif isinstance(chunk, AIMessageChunk):
             response += chunk.content
@@ -80,7 +80,7 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, agent: Compiled
             print(chunk.content, end='', flush=True)
             first_content = False
         elif isinstance(chunk, ToolMessage):
-            print(Back.WHITE + Fore.BLUE + "Invoking the tool called " + chunk.name + Back.RESET + Fore.RESET)
+            print( Fore.MAGENTA + "Invoking the tool called " + chunk.name +  Fore.RESET)
 
 
     print("\n")
