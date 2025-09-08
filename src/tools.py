@@ -4,7 +4,7 @@ from data.brazillian_states import state_acronyms
 from pydantic import BaseModel, Field
 
 class StateAcronymInput(BaseModel):
-    state_name: str = Field(description="The name of the state in brazillian portuguese, with beggining capital letters and all the accents needed")
+    state_name: str = Field(description="The name of the state in brazillian portuguese, with beggining capital letters and all the accents needed. If the user input cannot be parsed as a BRAZILLIAN state, it CANNOT be used in this tool.")
 
 @tool(args_schema=StateAcronymInput)
 def state_acronym(state_name: str) -> str:
