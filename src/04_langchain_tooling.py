@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import uuid
 from utils import get_args, get_models, get_llm
 from tools import state_acronym, web_search, get_tool_by_name
 from schemas.message import MessageCreate
@@ -14,30 +15,24 @@ from langchain_openai import ChatOpenAI
 from datetime import datetime
 from colorama import Fore, Style, Back
 
-def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
+def init_chat(chat_id: str, db) -> list[BaseMessage]:
     print(Fore.CYAN)
-    current_history = []
+    current_history = fetch_messages(db, chat_id)
 
-    if chat_id is None:
-        chat_id = create_chat(db)
-        print(f"NEW CHAT, ID: {chat_id}\n")
+    if current_history:
+        print(f"CHOSEN CHAT, ID: {chat_id}\n")
+        for msg in current_history:
+            match msg.type:
+                case "system":
+                    print(f"{Fore.CYAN}SYSTEM: {Fore.RESET}{msg.content}")
+                case "human":
+                    print(f"{Fore.CYAN}HUMAN: {Fore.RESET}{msg.content}")
+                case "ai":
+                    print(f"{Fore.CYAN}AI: {Fore.RESET}{msg.content}")
+
+        print()
     else:
-        current_history = fetch_messages(db, chat_id)
-
-        if len(current_history) > 0:
-            print(f"CHOSEN CHAT, ID: {chat_id}\n")
-            for msg in current_history:
-                match msg.type:
-                    case "system":
-                        print(f"{Fore.CYAN}SYSTEM: {Fore.RESET}{msg.content}")
-                    case "human":
-                        print(f"{Fore.CYAN}HUMAN: {Fore.RESET}{msg.content}")
-                    case "ai":
-                        print(f"{Fore.CYAN}AI: {Fore.RESET}{msg.content}")
-
-            print()
-        else:
-            print(f"\nEMPTY CHOSEN CHAT, ID: {chat_id}\n")
+        print(f"\nEMPTY CHAT, ID: {chat_id}\n")
 
     return current_history
 
@@ -118,7 +113,7 @@ def main():
     provider = args.provider
     lang = args.language
     stream = args.stream
-    chat_id = args.chat_id
+    chat_id = args.chat_id if args.chat_id else str(uuid.uuid4())
 
     models = get_models()
     model = models.get(provider)
