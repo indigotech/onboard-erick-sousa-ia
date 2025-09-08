@@ -7,7 +7,6 @@ from langchain_community.chat_message_histories import SQLChatMessageHistory
 
 def init_db(name: str) -> sqlite3.Connection:
     db_path = os.path.join(os.getcwd(), 'src','data', name)
-    print(db_path)
 
     db = sqlite3.connect(db_path)
     cursor = db.cursor()
