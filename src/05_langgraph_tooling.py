@@ -42,7 +42,7 @@ def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
 def invoke_response(prompt: ChatPromptValue, temp_history: list, agent: CompiledStateGraph, tools: list[Tool], current_history: list[BaseMessage]):
     message_count = len(current_history)
     response = ""
-    print("\n" +  Fore.RED + "Task --> LLM" +  Fore.RESET)
+    print("\n" + Fore.RED + "Task --> LLM" + Fore.RESET)
     updated_messages = agent.invoke(prompt)
     print( Fore.GREEN + "LLM reasoning" +  Fore.RESET)
 
@@ -80,7 +80,7 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, agent: Compiled
             print(chunk.content, end='', flush=True)
             first_content = False
         elif isinstance(chunk, ToolMessage):
-            print( Fore.MAGENTA + "Invoking the tool called " + chunk.name +  Fore.RESET)
+            print(Fore.MAGENTA + "Invoking the tool called " + chunk.name + Fore.RESET)
 
 
     print("\n")
