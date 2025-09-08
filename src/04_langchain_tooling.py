@@ -63,7 +63,7 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
     response = ""
     first_tc = True
     first_content = True
-    print("\n" +  Fore.RED + "STEP 1: Task --> LLM" +  Fore.RESET)
+    print("\n" + Fore.RED + "STEP 1: Task --> LLM" + Fore.RESET)
 
     for chunk in llm.stream(prompt):
         if first_tc:
@@ -83,19 +83,19 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
 
     print()
 
-    print( Fore.GREEN + "STEP 2: LLM reasoning" +  Fore.RESET)
+    print(Fore.GREEN + "STEP 2: LLM reasoning" + Fore.RESET)
 
     if gathered.tool_calls:
-        print( Fore.YELLOW + "STEP 3: LLM --> Tool" +  Fore.RESET)
+        print(Fore.YELLOW + "STEP 3: LLM --> Tool" + Fore.RESET)
         temp_history.append(gathered)
         for tool_call in gathered.tool_calls:
             selected_tool = get_tool_by_name(tools, tool_call["name"])
             tool_result = selected_tool.invoke(tool_call)
-            print( Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] +  Fore.RESET)
+            print(Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] + Fore.RESET)
             temp_history.append(tool_result)
-            print( Fore.MAGENTA + "STEP 5: Result. Tool call completed." +  Fore.RESET)
+            print(Fore.MAGENTA + "STEP 5: Result. Tool call completed." + Fore.RESET)
 
-        print( Fore.CYAN + "STEP 6: Tool --> LLM")
+        print(Fore.CYAN + "STEP 6: Tool --> LLM")
         print(Back.WHITE + Fore.BLACK + "STEP 7: LLM --> Response" + Back.RESET + Fore.RESET)
         print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
 
