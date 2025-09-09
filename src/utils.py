@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 
 def get_models() -> dict:
     return {
-        "openai": "gpt-4o-mini",
+        "openai": "gpt-4.1",
         "deepseek": "deepseek/deepseek-r1:free",
         "meta-llama": "meta-llama/llama-4-maverick:free",
     }
