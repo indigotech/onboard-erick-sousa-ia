@@ -111,7 +111,8 @@ def main():
     )
 
     llm = get_llm(provider, model)
-    agent = create_react_agent(llm, [state_acronym, web_search()])
+    tools = [state_acronym, web_search()]
+    agent = create_react_agent(llm, tools)
 
     current_history = init_chat(chat_id, db)
     new_messages = []
