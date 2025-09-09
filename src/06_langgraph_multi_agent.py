@@ -1,0 +1,287 @@
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
+import uuid
+from utils import get_args, get_models, get_llm
+from tools import state_acronym, stock_price, web_search, get_tool_by_name
+from schemas.message import MessageCreate
+from db import init_db, fetch_messages, save_messages, create_chat
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages.ai import AIMessageChunk
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompt_values import ChatPromptValue
+from langchain_core.tools import tool, Tool, InjectedToolCallId
+from langgraph.prebuilt import create_react_agent, InjectedState
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph import StateGraph, START, MessagesState
+from langgraph.types import Command
+from datetime import datetime
+from colorama import Fore, Style, Back
+from typing import Annotated
+
+
+def create_handoff_tool(agent: CompiledStateGraph, agent_name: str, description: str | None = None):
+    name = f"transfer_to_{agent_name}"
+    description = description or f"Delegate task to {agent_name}."
+
+    @tool(name, description=description)
+    def handoff_tool(
+        tool_call: dict,
+    ):
+        args_from_supervisor = tool_call.get("args", {})
+        message_to_agent = AIMessage(content=str(args_from_supervisor))
+        response = agent.invoke({"messages": [message_to_agent]})
+        last_message = response.get("messages")[-1]
+ 
+        return ToolMessage(content=last_message, tool_call_id=tool_call.get("id"))
+
+    return handoff_tool
+
+def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
+    print(Fore.CYAN)
+    current_history = fetch_messages(db, chat_id)
+
+    if current_history:
+        print(f"CHOSEN CHAT, ID: {chat_id}\n")
+        for msg in current_history:
+            match msg.type:
+                case "system":
+                    print(f"{Fore.CYAN}SYSTEM: {Fore.RESET}{msg.content}")
+                case "human":
+                    print(f"{Fore.CYAN}HUMAN: {Fore.RESET}{msg.content}")
+                case "ai":
+                    print(f"{Fore.CYAN}AI: {Fore.RESET}{msg.content}")
+
+        print()
+    else:
+        print(f"\nEMPTY CHAT, ID: {chat_id}\n")
+
+    return current_history
+
+
+def invoke_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]):
+    print("\n" + Fore.RED + "STEP 1: Task --> LLM" + Fore.RESET)
+    response = llm.invoke(prompt)
+    print( Fore.GREEN + "STEP 2: LLM reasoning" +  Fore.RESET)
+
+    for step in range(0, 5):
+        print(Back.WHITE + Fore.BLACK + f"Current step: {step}" + Back.RESET + Fore.RESET)
+
+        if response.tool_calls:
+            print(Fore.YELLOW + "STEP 3: LLM --> Tool" +  Fore.RESET)
+            temp_history.append(response)
+            for tool_call in response.tool_calls:
+                selected_tool = get_tool_by_name(tools, tool_call["name"])
+                tool_result = selected_tool.invoke({"tool_call": tool_call})
+                print(Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] + Fore.RESET)
+                temp_history.append(tool_result)
+                print(Fore.MAGENTA + "STEP 5: Result. Tool call completed." + Fore.RESET)
+
+            print(Fore.CYAN + "STEP 6: Tool --> LLM" + Fore.RESET)
+            response = llm.invoke(temp_history)
+            print(Back.WHITE + Fore.BLACK + "STEP 7: LLM --> Response" + Back.RESET + Fore.RESET)
+        else:
+            break
+ 
+    print(Fore.CYAN + "\nResponse: " + Fore.RESET + response.content)
+    print()
+    return response
+
+def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]) -> str:
+    response = ""
+    first_tc = True
+    first_content = True
+    print("\n" + Fore.RED + "STEP 1: Task --> LLM" + Fore.RESET)
+
+    for chunk in llm.stream(prompt):
+        if first_tc:
+            gathered = chunk
+            first_tc = False
+        else:
+            gathered = gathered + chunk
+
+        if chunk.content:
+            response += chunk.content
+
+            if first_content:
+                print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
+
+            print(chunk.content, end='', flush=True)
+            first_content = False
+
+    print()
+
+    print(Fore.GREEN + "STEP 2: LLM reasoning" + Fore.RESET)
+
+    for step in range(0, 5):
+        if gathered.tool_calls:
+            print(Fore.YELLOW + "STEP 3: LLM --> Tool" + Fore.RESET)
+            temp_history.append(gathered)
+            for tool_call in gathered.tool_calls:
+                selected_tool = get_tool_by_name(tools, tool_call["name"])
+                tool_result = selected_tool.invoke({"tool_call": tool_call})
+                print(Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] + Fore.RESET)
+                temp_history.append(tool_result)
+                print(Fore.MAGENTA + "STEP 5: Result. Tool call completed." + Fore.RESET)
+
+            print(Fore.CYAN + "STEP 6: Tool --> LLM")
+            print(Back.WHITE + Fore.BLACK + "STEP 7: LLM --> Response" + Back.RESET + Fore.RESET)
+            print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
+
+            first_tc = True
+            for chunk in llm.stream(temp_history):
+                if first_tc:
+                    gathered = chunk
+                    first_tc = False
+                else:
+                    gathered = gathered + chunk
+
+                if chunk.content:
+                    response += chunk.content
+
+                    if first_content:
+                        print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
+
+                    print(chunk.content, end='', flush=True)
+                    first_content = False
+
+
+    print("\n")
+    return response
+
+def main():
+    db = init_db(os.getenv("SQLITE_DB_NAME"))
+
+    args = get_args()
+    provider = args.provider
+    lang = args.language
+    stream = args.stream
+    chat_id = args.chat_id if args.chat_id else str(uuid.uuid4())
+
+    models = get_models()
+    model = models.get(provider)
+
+
+    system_prompt = f"""
+        You are a supervisor managing three agents:
+        1. A stock news agent. Assign web search related tasks to this agent. If the user does not explicitly ask for stock news, don't assign the task to it.
+            ALWAYS pass any instructions provided by the user, specially specifications regarging the search parameters, companies or stock tickers.
+        2. A stock price agent. Assign stock price related tasks to this agent. If the user does not explicitly ask for a stock price, don't assign the task to it.
+            ALWAYS pass the ticker symbol or name. You can pass multiple stocks in the same call as a list if necessary.
+        3. A writer agent. Assign to this agent the task of writing every single answer. If needed, it will summarize the output from the 
+          other two agents to the user. ALWAYS tell it to use the following language: {lang}, even if it is not the language utilized by the user or 
+          if the user demands you to answer in another language.
+
+        Follow the instructions:
+        - Assign work to one agent at a time, do not call agents in parallel.
+        - Do not do any work by yourself, always call an agent.
+        - Always pass parameters obtained on the conversation to the agents.
+    """
+ 
+    messages = ChatPromptTemplate(
+        [
+            SystemMessage(content=system_prompt),
+            MessagesPlaceholder("history"),
+            ("human", "{user_input}"),
+        ]
+    )
+
+    llm = get_llm(provider, model)
+
+
+    stock_news_agent = create_react_agent(
+        name="stock_news_agent",
+        model=llm,
+        tools=[web_search()],
+        prompt="You are a helpful and objective web searching assistant. Your only function is to use the internet to search for news regarding stocks specified by the user.",
+    )
+
+    stock_price_agent = create_react_agent(
+        name="stock_price_agent",
+        model=llm,
+        tools=[stock_price],
+        prompt="You are an objective stock price assistant. Your only function is to give the exact price of stocks specified by the user.",
+    )
+
+    writer_agent = create_react_agent(
+        name="writer_agent",
+        model=llm,
+        tools=[],
+        prompt=f"""You are a helpful and objective web searching assistant. Your function is to answer every single question from the user. ALWAYS answer clearly. ONLY provide information that was passed to you by the supervisor.
+            NEVER add information from others sources. ALWAYS use the following language: {lang}, even if it is not the language utilized by the user or if the user demands you to answer in another language.
+        """,
+    )
+
+    assign_to_stock_news_agent = create_handoff_tool(
+        agent=stock_news_agent,
+        agent_name="stock_news_agent",
+        description="Assign task to a stock news agent.",
+    )
+
+    assign_to_stock_price_agent = create_handoff_tool(
+        agent=stock_price_agent,
+        agent_name="stock_price_agent",
+        description="Assign task to a stock price agent.",
+    )
+
+    assign_to_writer_agent = create_handoff_tool(
+        agent=writer_agent,
+        agent_name="writer_agent",
+        description="Assign task to a writer agent.",
+    )
+
+    tools = [
+        assign_to_stock_news_agent,
+        assign_to_stock_price_agent,
+        assign_to_writer_agent,
+    ]
+
+    supervisor = llm.bind_tools(tools)
+
+    current_history = init_chat(chat_id, db)
+    new_messages = []
+
+    while True:
+        user_input = input(Fore.CYAN + "Enter your message (exit to stop conversation): " + Fore.RESET)
+
+        if user_input == "exit":
+            break;
+
+        prompt = messages.invoke(
+            {
+                "history": current_history,
+                "user_input": user_input,
+            }
+        )
+
+        current_history.append(HumanMessage(content=user_input))
+        new_messages.append(MessageCreate(
+            content=user_input,
+            role="user",
+            sent_at=datetime.now(),
+        ))
+        temp_history = [SystemMessage(content=system_prompt)] + current_history[:]
+
+        if stream:
+            response = stream_response(prompt, temp_history, supervisor, tools)
+            ai_message = AIMessage(content=response)
+        else:
+            response = invoke_response(prompt, temp_history, supervisor, tools)
+            ai_message = AIMessage(content=response.content)
+ 
+        new_messages.append(MessageCreate(
+            content=ai_message.content,
+            role="assistant",
+            sent_at=datetime.now(),
+        ))
+        current_history.append(AIMessage(content=new_messages[-1].content))
+
+    save_messages(db, chat_id, new_messages)
+
+    db.close()
+
+main()
+
+
