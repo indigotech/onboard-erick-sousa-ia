@@ -12,6 +12,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Base
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.prompt_values import ChatPromptValue
+from langchain_core.runnables.base import RunnableBinding
 from langchain_core.tools import tool, Tool, InjectedToolCallId
 from langgraph.prebuilt import create_react_agent, InjectedState
 from langgraph.graph.state import CompiledStateGraph
@@ -20,22 +21,23 @@ from langgraph.types import Command
 from datetime import datetime
 from colorama import Fore, Style, Back
 from typing import Annotated
+from pydantic import BaseModel, Field
 
 
 def create_handoff_tool(agent: CompiledStateGraph, agent_name: str, description: str | None = None):
     name = f"transfer_to_{agent_name}"
     description = description or f"Delegate task to {agent_name}."
 
-    @tool(name, description=description)
-    def handoff_tool(
-        tool_call: dict,
-    ):
-        args_from_supervisor = tool_call.get("args", {})
-        message_to_agent = AIMessage(content=str(args_from_supervisor))
+    class GeneralRequest(BaseModel):
+        request: str = Field(description="Must contain the task to be completed by the agent and all the information that might be needed to complete it.")
+
+    @tool(name, description=description, args_schema=GeneralRequest)
+    def handoff_tool(request: str) -> str:
+        message_to_agent = HumanMessage(content=request)
         response = agent.invoke({"messages": [message_to_agent]})
         last_message = response.get("messages")[-1]
  
-        return ToolMessage(content=last_message, tool_call_id=tool_call.get("id"))
+        return last_message
 
     return handoff_tool
 
@@ -60,6 +62,71 @@ def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
 
     return current_history
 
+def init_agents(provider: str, lang: str, system_prompt: str):
+    models = get_models()
+    model = models.get(provider)
+
+ 
+    messages = ChatPromptTemplate(
+        [
+            SystemMessage(content=system_prompt),
+            MessagesPlaceholder("history"),
+            ("human", "{user_input}"),
+        ]
+    )
+
+    llm = get_llm(provider, model)
+
+    stock_news_agent = create_react_agent(
+        name="stock_news_agent",
+        model=llm,
+        tools=[web_search()],
+        prompt="You are a helpful and objective web searching assistant. Your only function is to use the internet to search for news regarding stocks specified by the supervisor.",
+    )
+
+    stock_price_agent = create_react_agent(
+        name="stock_price_agent",
+        model=llm,
+        tools=[stock_price],
+        prompt="You are an objective stock price assistant. Your only function is to give the exact price of stocks specified by the supervisor.",
+    )
+
+    writer_agent = create_react_agent(
+        name="writer_agent",
+        model=llm,
+        tools=[],
+        prompt=f"""You are a helpful and objective web searching assistant. Your function is to answer every single question from the user. ALWAYS answer clearly. ONLY provide information that was passed to you by the supervisor.
+            NEVER add information from others sources. ALWAYS use the following language: {lang}, even if it is not the language utilized by the user or if the user demands you to answer in another language.
+        """,
+    )
+
+    assign_to_stock_news_agent = create_handoff_tool(
+        agent=stock_news_agent,
+        agent_name="stock_news_agent",
+        description="Assign task to a stock news agent.",
+    )
+
+    assign_to_stock_price_agent = create_handoff_tool(
+        agent=stock_price_agent,
+        agent_name="stock_price_agent",
+        description="Assign task to a stock price agent.",
+    )
+
+    assign_to_writer_agent = create_handoff_tool(
+        agent=writer_agent,
+        agent_name="writer_agent",
+        description="Assign task to a writer agent.",
+    )
+
+    tools = [
+        assign_to_stock_news_agent,
+        assign_to_stock_price_agent,
+        assign_to_writer_agent,
+    ]
+
+    supervisor = llm.bind_tools(tools)
+    return supervisor, tools, messages
+
 
 def invoke_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]):
     print("\n" + Fore.RED + "STEP 1: Task --> LLM" + Fore.RESET)
@@ -74,7 +141,7 @@ def invoke_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
             temp_history.append(response)
             for tool_call in response.tool_calls:
                 selected_tool = get_tool_by_name(tools, tool_call["name"])
-                tool_result = selected_tool.invoke({"tool_call": tool_call})
+                tool_result = selected_tool.invoke(tool_call)
                 print(Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] + Fore.RESET)
                 temp_history.append(tool_result)
                 print(Fore.MAGENTA + "STEP 5: Result. Tool call completed." + Fore.RESET)
@@ -116,6 +183,7 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
     print(Fore.GREEN + "STEP 2: LLM reasoning" + Fore.RESET)
 
     for step in range(0, 5):
+        print(Back.WHITE + Fore.BLACK + f"Current step: {step}" + Back.RESET + Fore.RESET)
         if gathered.tool_calls:
             print(Fore.YELLOW + "STEP 3: LLM --> Tool" + Fore.RESET)
             temp_history.append(gathered)
@@ -128,9 +196,9 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
 
             print(Fore.CYAN + "STEP 6: Tool --> LLM")
             print(Back.WHITE + Fore.BLACK + "STEP 7: LLM --> Response" + Back.RESET + Fore.RESET)
-            print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
 
             first_tc = True
+            first_content = True
             for chunk in llm.stream(temp_history):
                 if first_tc:
                     gathered = chunk
@@ -160,16 +228,14 @@ def main():
     stream = args.stream
     chat_id = args.chat_id if args.chat_id else str(uuid.uuid4())
 
-    models = get_models()
-    model = models.get(provider)
-
 
     system_prompt = f"""
         You are a supervisor managing three agents:
         1. A stock news agent. Assign web search related tasks to this agent. If the user does not explicitly ask for stock news, don't assign the task to it.
             ALWAYS pass any instructions provided by the user, specially specifications regarging the search parameters, companies or stock tickers.
-        2. A stock price agent. Assign stock price related tasks to this agent. If the user does not explicitly ask for a stock price, don't assign the task to it.
-            ALWAYS pass the ticker symbol or name. You can pass multiple stocks in the same call as a list if necessary.
+            NEVER pass any instructions that were not specified by the user.
+        2. A stock price agent. Assign to it the task of getting the latest price for a stock. If the user does not explicitly ask for a stock price, don't assign the task to it.
+            ALWAYS specify the ticker symbol or name. You can ask for multiple stocks in the same call if necessary.
         3. A writer agent. Assign to this agent the task of writing every single answer. If needed, it will summarize the output from the 
           other two agents to the user. ALWAYS tell it to use the following language: {lang}, even if it is not the language utilized by the user or 
           if the user demands you to answer in another language.
@@ -177,69 +243,9 @@ def main():
         Follow the instructions:
         - Assign work to one agent at a time, do not call agents in parallel.
         - Do not do any work by yourself, always call an agent.
-        - Always pass parameters obtained on the conversation to the agents.
     """
- 
-    messages = ChatPromptTemplate(
-        [
-            SystemMessage(content=system_prompt),
-            MessagesPlaceholder("history"),
-            ("human", "{user_input}"),
-        ]
-    )
 
-    llm = get_llm(provider, model)
-
-
-    stock_news_agent = create_react_agent(
-        name="stock_news_agent",
-        model=llm,
-        tools=[web_search()],
-        prompt="You are a helpful and objective web searching assistant. Your only function is to use the internet to search for news regarding stocks specified by the user.",
-    )
-
-    stock_price_agent = create_react_agent(
-        name="stock_price_agent",
-        model=llm,
-        tools=[stock_price],
-        prompt="You are an objective stock price assistant. Your only function is to give the exact price of stocks specified by the user.",
-    )
-
-    writer_agent = create_react_agent(
-        name="writer_agent",
-        model=llm,
-        tools=[],
-        prompt=f"""You are a helpful and objective web searching assistant. Your function is to answer every single question from the user. ALWAYS answer clearly. ONLY provide information that was passed to you by the supervisor.
-            NEVER add information from others sources. ALWAYS use the following language: {lang}, even if it is not the language utilized by the user or if the user demands you to answer in another language.
-        """,
-    )
-
-    assign_to_stock_news_agent = create_handoff_tool(
-        agent=stock_news_agent,
-        agent_name="stock_news_agent",
-        description="Assign task to a stock news agent.",
-    )
-
-    assign_to_stock_price_agent = create_handoff_tool(
-        agent=stock_price_agent,
-        agent_name="stock_price_agent",
-        description="Assign task to a stock price agent.",
-    )
-
-    assign_to_writer_agent = create_handoff_tool(
-        agent=writer_agent,
-        agent_name="writer_agent",
-        description="Assign task to a writer agent.",
-    )
-
-    tools = [
-        assign_to_stock_news_agent,
-        assign_to_stock_price_agent,
-        assign_to_writer_agent,
-    ]
-
-    supervisor = llm.bind_tools(tools)
-
+    supervisor, tools, messages = init_agents(provider, lang, system_prompt)
     current_history = init_chat(chat_id, db)
     new_messages = []
 
