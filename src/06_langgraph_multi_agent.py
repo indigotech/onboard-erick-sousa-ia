@@ -209,7 +209,7 @@ def stream_response(
         first_content = True
         updated_prompt = prompt if first_prompt else temp_history
 
-        for chunk in llm.stream(temp_history):
+        for chunk in llm.stream(updated_prompt):
             if first_tc:
                 gathered = chunk
                 first_tc = False
