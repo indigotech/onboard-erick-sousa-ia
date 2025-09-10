@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from utils import get_args, get_models, get_llm
@@ -18,22 +19,20 @@ def main():
 
     user_input = input("Enter your message: ")
 
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_input)
-    ]
+    messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
 
     llm = get_llm(provider, model)
 
     print("\nResponse: \n")
- 
+
     if stream:
         for chunk in llm.stream(messages):
-            print(chunk.content, end='', flush=True)
+            print(chunk.content, end="", flush=True)
     else:
         response = llm.invoke(messages)
         print(response.content)
- 
+
     print()
+
 
 main()

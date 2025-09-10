@@ -1,10 +1,17 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import os
 from utils import get_args, get_models, get_llm
 from schemas.message import MessageCreate
-from db import init_db, fetch_messages, save_messages, create_chat, fetch_messages_for_runnable
+from db import (
+    init_db,
+    fetch_messages,
+    save_messages,
+    create_chat,
+    fetch_messages_for_runnable,
+)
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -24,7 +31,7 @@ def main():
     model = models.get(provider)
 
     system_prompt = f"You are a helpful and objective assistant. Always answer clearly. Always use the following language in your response: {lang}, even if it is not the language utilized by the user."
- 
+
     messages = ChatPromptTemplate(
         [
             SystemMessage(content=system_prompt),
@@ -73,20 +80,24 @@ def main():
         user_input = input("Enter your message (exit to stop conversation): ")
 
         if user_input == "exit":
-            break;
+            break
 
-        new_messages.append(MessageCreate(
-            content=user_input,
-            role="user",
-            sent_at=datetime.now(),
-        ))
+        new_messages.append(
+            MessageCreate(
+                content=user_input,
+                role="user",
+                sent_at=datetime.now(),
+            )
+        )
 
-        print("\nResponse: ", end='')
+        print("\nResponse: ", end="")
 
         if stream:
             response = ""
-            for chunk in current_history.stream({"user_input": user_input}, config=config):
-                print(chunk.content, end='', flush=True)
+            for chunk in current_history.stream(
+                {"user_input": user_input}, config=config
+            ):
+                print(chunk.content, end="", flush=True)
                 response += chunk.content
             ai_message = AIMessage(content=response)
             print("\n")
@@ -95,15 +106,18 @@ def main():
             print(response.content)
             ai_message = AIMessage(content=response.content)
             print()
- 
-        new_messages.append(MessageCreate(
-            content=ai_message.content,
-            role="assistant",
-            sent_at=datetime.now(),
-        ))
+
+        new_messages.append(
+            MessageCreate(
+                content=ai_message.content,
+                role="assistant",
+                sent_at=datetime.now(),
+            )
+        )
 
     save_messages(db, chat_id, new_messages)
 
     db.close()
+
 
 main()

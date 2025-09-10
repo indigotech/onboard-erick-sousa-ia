@@ -16,6 +16,7 @@ ddgs = "9.5.5"
 colorama = "0.4.6"
 langgraph = "0.6.7"
 yfinance = "0.2.65"
+ruff = "0.13.0"
 
 
 [build-system]

@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import os
@@ -7,7 +8,13 @@ from utils import get_args, get_models, get_llm
 from tools import state_acronym, web_search, get_tool_by_name
 from schemas.message import MessageCreate
 from db import init_db, fetch_messages, save_messages, create_chat
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import (
+    SystemMessage,
+    HumanMessage,
+    AIMessage,
+    BaseMessage,
+    ToolMessage,
+)
 from langchain_core.messages.ai import AIMessageChunk
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.prompt_values import ChatPromptValue
@@ -16,6 +23,7 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.graph.state import CompiledStateGraph
 from datetime import datetime
 from colorama import Fore, Style
+
 
 def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
     print(Fore.CYAN)
@@ -39,12 +47,18 @@ def init_chat(chat_id: str | None, db) -> list[BaseMessage]:
     return current_history
 
 
-def invoke_response(prompt: ChatPromptValue, temp_history: list, agent: CompiledStateGraph, tools: list[Tool], current_history: list[BaseMessage]):
+def invoke_response(
+    prompt: ChatPromptValue,
+    temp_history: list,
+    agent: CompiledStateGraph,
+    tools: list[Tool],
+    current_history: list[BaseMessage],
+):
     message_count = len(current_history)
     response = ""
     print("\n" + Fore.RED + "Task --> LLM" + Fore.RESET)
     updated_messages = agent.invoke(prompt)
-    print( Fore.GREEN + "LLM reasoning" +  Fore.RESET)
+    print(Fore.GREEN + "LLM reasoning" + Fore.RESET)
 
     for new_message in updated_messages.get("messages")[message_count:]:
         if isinstance(new_message, AIMessage) and not new_message.content:
@@ -53,11 +67,22 @@ def invoke_response(prompt: ChatPromptValue, temp_history: list, agent: Compiled
             response = new_message
             print(Fore.CYAN + "\nResponse: " + Fore.RESET + response.content + "\n")
         elif isinstance(new_message, ToolMessage):
-            print(Fore.MAGENTA + "Invoking the tool called " + new_message.name + Fore.RESET)
+            print(
+                Fore.MAGENTA
+                + "Invoking the tool called "
+                + new_message.name
+                + Fore.RESET
+            )
 
     return response
 
-def stream_response(prompt: ChatPromptValue, temp_history: list, agent: CompiledStateGraph, tools: list[Tool]) -> str:
+
+def stream_response(
+    prompt: ChatPromptValue,
+    temp_history: list,
+    agent: CompiledStateGraph,
+    tools: list[Tool],
+) -> str:
     response = ""
     first_tc = True
     first_content = True
@@ -75,16 +100,16 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, agent: Compiled
             response += chunk.content
 
             if first_content:
-                print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
+                print(Fore.CYAN + "\nResponse: " + Fore.RESET, end="")
 
-            print(chunk.content, end='', flush=True)
+            print(chunk.content, end="", flush=True)
             first_content = False
         elif isinstance(chunk, ToolMessage):
             print(Fore.MAGENTA + "Invoking the tool called " + chunk.name + Fore.RESET)
 
-
     print("\n")
     return response
+
 
 def main():
     db = init_db(os.getenv("SQLITE_DB_NAME"))
@@ -101,7 +126,7 @@ def main():
     tools = [state_acronym, web_search()]
 
     system_prompt = f"You are a helpful and objective assistant. Always answer clearly. ALWAYS use the following language in your response: {lang}, even if it is not the language utilized by the user or if the user demands you to answer in another language."
- 
+
     messages = ChatPromptTemplate(
         [
             SystemMessage(content=system_prompt),
@@ -118,10 +143,12 @@ def main():
     new_messages = []
 
     while True:
-        user_input = input(Fore.CYAN + "Enter your message (exit to stop conversation): " + Fore.RESET)
+        user_input = input(
+            Fore.CYAN + "Enter your message (exit to stop conversation): " + Fore.RESET
+        )
 
         if user_input == "exit":
-            break;
+            break
 
         prompt = messages.invoke(
             {
@@ -131,30 +158,36 @@ def main():
         )
 
         current_history.append(HumanMessage(content=user_input))
-        new_messages.append(MessageCreate(
-            content=user_input,
-            role="user",
-            sent_at=datetime.now(),
-        ))
+        new_messages.append(
+            MessageCreate(
+                content=user_input,
+                role="user",
+                sent_at=datetime.now(),
+            )
+        )
         temp_history = [SystemMessage(content=system_prompt)] + current_history[:]
 
         if stream:
             response = stream_response(prompt, temp_history, agent, tools)
             ai_message = AIMessage(content=response)
         else:
-            response = invoke_response(prompt, temp_history, agent, tools, current_history)
+            response = invoke_response(
+                prompt, temp_history, agent, tools, current_history
+            )
             ai_message = AIMessage(content=response.content)
- 
-        new_messages.append(MessageCreate(
-            content=ai_message.content,
-            role="assistant",
-            sent_at=datetime.now(),
-        ))
+
+        new_messages.append(
+            MessageCreate(
+                content=ai_message.content,
+                role="assistant",
+                sent_at=datetime.now(),
+            )
+        )
         current_history.append(AIMessage(content=new_messages[-1].content))
 
     save_messages(db, chat_id, new_messages)
 
     db.close()
 
-main()
 
+main()

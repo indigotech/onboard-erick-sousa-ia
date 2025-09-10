@@ -5,8 +5,9 @@ from schemas.message import MessageCreate
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 
+
 def init_db(name: str) -> sqlite3.Connection:
-    db_path = os.path.join(os.getcwd(), 'src','data', name)
+    db_path = os.path.join(os.getcwd(), "src", "data", name)
 
     db = sqlite3.connect(db_path)
     cursor = db.cursor()
@@ -35,16 +36,18 @@ def init_db(name: str) -> sqlite3.Connection:
     db.commit()
     return db
 
+
 def create_chat(db: sqlite3.Connection) -> str:
     chat_id = str(uuid.uuid4())
 
     statement = """INSERT INTO chats (id) VALUES (?)"""
- 
+
     cursor = db.cursor()
     db_chat = cursor.execute(statement, (chat_id,))
     db.commit()
 
     return chat_id
+
 
 def fetch_messages(db: sqlite3.Connection, chat_id: str) -> list[BaseMessage]:
     cursor = db.cursor()
@@ -62,27 +65,22 @@ def fetch_messages(db: sqlite3.Connection, chat_id: str) -> list[BaseMessage]:
             case "assistant":
                 messages.append(AIMessage(content=content))
 
-
     return messages
 
 
 def save_messages(db: sqlite3.Connection, chat_id: str, messages: list[MessageCreate]):
-
     cursor = db.cursor()
     statement = """INSERT INTO messages (id, chat_id, sent_at, role, content) VALUES (?, ?, ?, ?, ?)"""
     for msg in messages:
-        cursor.execute(statement, (
-            str(uuid.uuid4()),
-            chat_id,
-            msg.sent_at,
-            msg.role,
-            msg.content
-            )
+        cursor.execute(
+            statement, (str(uuid.uuid4()), chat_id, msg.sent_at, msg.role, msg.content)
         )
 
     db.commit()
 
+
 # for script with RunnableWithMessageHistory
 def fetch_messages_for_runnable(session_id: str) -> SQLChatMessageHistory:
-    return SQLChatMessageHistory(session_id, connection=f"sqlite:///./src/data/{os.getenv('SQLITE_DB_NAME')}")
-
+    return SQLChatMessageHistory(
+        session_id, connection=f"sqlite:///./src/data/{os.getenv('SQLITE_DB_NAME')}"
+    )
