@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import os
@@ -23,7 +24,7 @@ def main():
     model = models.get(provider)
 
     system_prompt = f"You are a helpful and objective assistant. Always answer clearly. Always use the following language in your response: {lang}, even if it is not the language utilized by the user."
- 
+
     messages = ChatPromptTemplate(
         [
             SystemMessage(content=system_prompt),
@@ -63,7 +64,7 @@ def main():
         user_input = input("Enter your message (exit to stop conversation): ")
 
         if user_input == "exit":
-            break;
+            break
 
         prompt = messages.invoke(
             {
@@ -73,18 +74,20 @@ def main():
         )
 
         current_history.append(user_input)
-        new_messages.append(MessageCreate(
-            content=user_input,
-            role="user",
-            sent_at=datetime.now(),
-        ))
+        new_messages.append(
+            MessageCreate(
+                content=user_input,
+                role="user",
+                sent_at=datetime.now(),
+            )
+        )
 
-        print("\nResponse: ", end='')
+        print("\nResponse: ", end="")
 
         if stream:
             response = ""
             for chunk in llm.stream(prompt):
-                print(chunk.content, end='', flush=True)
+                print(chunk.content, end="", flush=True)
                 response += chunk.content
             ai_message = AIMessage(content=response)
             print("\n")
@@ -93,16 +96,19 @@ def main():
             print(response.content)
             ai_message = AIMessage(content=response.content)
             print()
- 
+
         current_history.append(ai_message)
-        new_messages.append(MessageCreate(
-            content=ai_message.content,
-            role="assistant",
-            sent_at=datetime.now(),
-        ))
+        new_messages.append(
+            MessageCreate(
+                content=ai_message.content,
+                role="assistant",
+                sent_at=datetime.now(),
+            )
+        )
 
     save_messages(db, chat_id, new_messages)
 
     db.close()
+
 
 main()

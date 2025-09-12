@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import os
@@ -14,6 +15,7 @@ from langchain_core.tools import tool, Tool
 from langchain_openai import ChatOpenAI
 from datetime import datetime
 from colorama import Fore, Style, Back
+
 
 def init_chat(chat_id: str, db) -> list[BaseMessage]:
     print(Fore.CYAN)
@@ -36,30 +38,47 @@ def init_chat(chat_id: str, db) -> list[BaseMessage]:
 
     return current_history
 
-def invoke_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]):
-    print("\n" +  Fore.RED + "STEP 1: Task --> LLM" +  Fore.RESET)
+
+def invoke_response(
+    prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]
+):
+    print("\n" + Fore.RED + "STEP 1: Task --> LLM" + Fore.RESET)
     response = llm.invoke(prompt)
-    print( Fore.GREEN + "STEP 2: LLM reasoning" +  Fore.RESET)
+    print(Fore.GREEN + "STEP 2: LLM reasoning" + Fore.RESET)
 
     if response.tool_calls:
-        print( Fore.YELLOW + "STEP 3: LLM --> Tool" +  Fore.RESET)
+        print(Fore.YELLOW + "STEP 3: LLM --> Tool" + Fore.RESET)
         temp_history.append(response)
         for tool_call in response.tool_calls:
             selected_tool = get_tool_by_name(tools, tool_call["name"])
             tool_result = selected_tool.invoke(tool_call)
-            print( Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] +  Fore.RESET)
+            print(
+                Fore.BLUE
+                + "STEP 4: Action. Invoking the tool called "
+                + tool_call["name"]
+                + Fore.RESET
+            )
             temp_history.append(tool_result)
-            print( Fore.MAGENTA + "STEP 5: Result. Tool call completed." +  Fore.RESET)
+            print(Fore.MAGENTA + "STEP 5: Result. Tool call completed." + Fore.RESET)
 
-        print( Fore.CYAN + "STEP 6: Tool --> LLM")
+        print(Fore.CYAN + "STEP 6: Tool --> LLM")
         response = llm.invoke(temp_history)
-        print(Back.WHITE + Fore.BLACK + "STEP 7: LLM --> Response" + Back.RESET + Fore.RESET)
- 
+        print(
+            Back.WHITE
+            + Fore.BLACK
+            + "STEP 7: LLM --> Response"
+            + Back.RESET
+            + Fore.RESET
+        )
+
     print(Fore.CYAN + "\nResponse: " + Fore.RESET + response.content)
     print()
     return response
 
-def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]) -> str:
+
+def stream_response(
+    prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI, tools: list[Tool]
+) -> str:
     response = ""
     first_tc = True
     first_content = True
@@ -76,9 +95,9 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
             response += chunk.content
 
             if first_content:
-                print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
+                print(Fore.CYAN + "\nResponse: " + Fore.RESET, end="")
 
-            print(chunk.content, end='', flush=True)
+            print(chunk.content, end="", flush=True)
             first_content = False
 
     print()
@@ -91,20 +110,32 @@ def stream_response(prompt: ChatPromptValue, temp_history: list, llm: ChatOpenAI
         for tool_call in gathered.tool_calls:
             selected_tool = get_tool_by_name(tools, tool_call["name"])
             tool_result = selected_tool.invoke(tool_call)
-            print(Fore.BLUE + "STEP 4: Action. Invoking the tool called " + tool_call["name"] + Fore.RESET)
+            print(
+                Fore.BLUE
+                + "STEP 4: Action. Invoking the tool called "
+                + tool_call["name"]
+                + Fore.RESET
+            )
             temp_history.append(tool_result)
             print(Fore.MAGENTA + "STEP 5: Result. Tool call completed." + Fore.RESET)
 
         print(Fore.CYAN + "STEP 6: Tool --> LLM")
-        print(Back.WHITE + Fore.BLACK + "STEP 7: LLM --> Response" + Back.RESET + Fore.RESET)
-        print(Fore.CYAN + "\nResponse: " + Fore.RESET, end='')
+        print(
+            Back.WHITE
+            + Fore.BLACK
+            + "STEP 7: LLM --> Response"
+            + Back.RESET
+            + Fore.RESET
+        )
+        print(Fore.CYAN + "\nResponse: " + Fore.RESET, end="")
 
         for chunk in llm.stream(temp_history):
             response += chunk.content
-            print(chunk.content, end='', flush=True)
+            print(chunk.content, end="", flush=True)
 
     print("\n")
     return response
+
 
 def main():
     db = init_db(os.getenv("SQLITE_DB_NAME"))
@@ -121,7 +152,7 @@ def main():
     tools = [state_acronym, web_search()]
 
     system_prompt = f"You are a helpful and objective assistant. Always answer clearly. ALWAYS use the following language in your response: {lang}, even if it is not the language utilized by the user or if the user demands you to answer in another language."
- 
+
     messages = ChatPromptTemplate(
         [
             SystemMessage(content=system_prompt),
@@ -138,10 +169,12 @@ def main():
     new_messages = []
 
     while True:
-        user_input = input(Fore.CYAN + "Enter your message (exit to stop conversation): " + Fore.RESET)
+        user_input = input(
+            Fore.CYAN + "Enter your message (exit to stop conversation): " + Fore.RESET
+        )
 
         if user_input == "exit":
-            break;
+            break
 
         prompt = messages.invoke(
             {
@@ -151,11 +184,13 @@ def main():
         )
 
         current_history.append(HumanMessage(content=user_input))
-        new_messages.append(MessageCreate(
-            content=user_input,
-            role="user",
-            sent_at=datetime.now(),
-        ))
+        new_messages.append(
+            MessageCreate(
+                content=user_input,
+                role="user",
+                sent_at=datetime.now(),
+            )
+        )
         temp_history = [SystemMessage(content=system_prompt)] + current_history[:]
 
         if stream:
@@ -164,16 +199,19 @@ def main():
         else:
             response = invoke_response(prompt, temp_history, llm, tools)
             ai_message = AIMessage(content=response.content)
- 
-        new_messages.append(MessageCreate(
-            content=ai_message.content,
-            role="assistant",
-            sent_at=datetime.now(),
-        ))
+
+        new_messages.append(
+            MessageCreate(
+                content=ai_message.content,
+                role="assistant",
+                sent_at=datetime.now(),
+            )
+        )
         current_history.append(AIMessage(content=new_messages[-1].content))
 
     save_messages(db, chat_id, new_messages)
 
     db.close()
+
 
 main()
