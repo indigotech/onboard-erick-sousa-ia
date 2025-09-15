@@ -283,12 +283,6 @@ def main():
     fallback = "Please ask about poems or stocks."
     graph = init_graph(llm, args.language, fallback)
     current_history = init_chat(chat_id, db)
-    messages = ChatPromptTemplate(
-        [
-            MessagesPlaceholder("history"),
-            ("human", "{user_input}"),
-        ]
-    )
     new_messages = []
 
     while True:
